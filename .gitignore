@@ -38,5 +38,6 @@ dist/
 # Arquivos de cache
 .cache/
 
-./get-spotify-token.js
-./spotify-auth.js
+# Arquivos específicos JS para ignorar
+get-spotify-token.js
+spotify-auth.js
