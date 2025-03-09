@@ -1,8 +1,7 @@
 // Arquivo: index.js
-// Versão simplificada do bot de música focada no Spotify
+
 process.env.YOUTUBE_EXTRACTOR_LIBRARY = "@distube/ytdl-core";
 
-// Importando as bibliotecas necessárias
 const {
   Client,
   GatewayIntentBits,
@@ -11,7 +10,7 @@ const {
   EmbedBuilder,
 } = require("discord.js");
 const { Player } = require("discord-player");
-const { token } = require("./config.json"); // Arquivo de configuração com o token do bot
+const { token } = require("./config.json");
 const fs = require("fs");
 const path = require("path");
 
