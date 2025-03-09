@@ -38,5 +38,5 @@ dist/
 # Arquivos de cache
 .cache/
 
-get-spotify-token.json
-spotify-auth.json
+./get-spotify-token.js
+./spotify-auth.js
