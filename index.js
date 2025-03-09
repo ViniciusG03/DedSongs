@@ -1,5 +1,6 @@
 // Arquivo: index.js
 // Versão simplificada do bot de música focada no Spotify
+process.env.YOUTUBE_EXTRACTOR_LIBRARY = "@distube/ytdl-core";
 
 // Importando as bibliotecas necessárias
 const {
@@ -28,9 +29,14 @@ const client = new Client({
 const player = new Player(client, {
   ytdlOptions: {
     quality: "highestaudio",
-    highWaterMark: 1 << 25, // 32MB buffer
+    highWaterMark: 1 << 25,
   },
-  connectionTimeout: 60000, // 60 segundos de timeout
+  skipFFmpeg: false,
+  useLegacyFFmpeg: false,
+  connectionTimeout: 60000,
+  // Adicione estas opções:
+  spotifyBridge: true, // Forçar o uso da bridge
+  // Importante: NÃO bloqueie o YouTube
 });
 
 // Configurações do Player e Spotify
@@ -106,6 +112,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
 // Eventos do player
 player.events.on("playerStart", (queue, track) => {
   try {
+    console.log("----- DEPURAÇÃO DE ÁUDIO -----");
+    console.log("Faixa iniciada:", track.title);
+    console.log("URL da faixa:", track.url);
+    console.log("ID do canal de voz:", queue.channel?.id);
+    console.log("Método de extração:", track.extractor || "desconhecido");
+    console.log(
+      "Estado do player:",
+      queue.node.isPlaying() ? "tocando" : "parado"
+    );
+    console.log("-----------------------------");
     const embed = new EmbedBuilder()
       .setTitle("🎵 Tocando agora")
       .setDescription(`**${track.title}**`)
@@ -187,11 +203,22 @@ player.events.on("error", (queue, error) => {
 });
 
 player.events.on("playerError", (queue, error) => {
-  console.error(`[Erro no player] ${error.message}`);
+  console.error("=== ERRO NO PLAYER ===");
+  console.error(`Mensagem: ${error.message}`);
+  console.error(`Stack: ${error.stack}`);
+  console.error(
+    "Faixa atual:",
+    queue.currentTrack ? queue.currentTrack.title : "Nenhuma"
+  );
+  console.error("======================");
+
   queue.metadata?.channel
     ?.send(`❌ Erro no player: ${error.message}`)
     .catch(console.error);
 });
 
-// Iniciando o bot com o token
+player.events.on("debug", (message) => {
+  console.log(`[Player Debug] ${message}`);
+});
+
 client.login(token);

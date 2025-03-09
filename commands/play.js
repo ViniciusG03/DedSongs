@@ -71,6 +71,8 @@ module.exports = {
       const searchResult = await player.search(consulta, {
         requestedBy: interaction.user,
         searchEngine: searchEngine,
+        // Adicione estas opções:
+        fallbackSearchEngine: QueryType.YOUTUBE_SEARCH, // Força pesquisa de fallback no YouTube
       });
 
       if (!searchResult || searchResult.tracks.length === 0) {
@@ -159,16 +161,14 @@ module.exports = {
             { name: "Solicitado por", value: interaction.user.username }
           );
       } else {
-        embed
-          .setDescription(`**${searchResult.tracks[0].title}**`)
-          .addFields(
-            {
-              name: "Artista",
-              value: searchResult.tracks[0].author || "Desconhecido",
-            },
-            { name: "Duração", value: searchResult.tracks[0].duration },
-            { name: "Solicitado por", value: interaction.user.username }
-          );
+        embed.setDescription(`**${searchResult.tracks[0].title}**`).addFields(
+          {
+            name: "Artista",
+            value: searchResult.tracks[0].author || "Desconhecido",
+          },
+          { name: "Duração", value: searchResult.tracks[0].duration },
+          { name: "Solicitado por", value: interaction.user.username }
+        );
       }
 
       await interaction.followUp({ embeds: [embed] });
