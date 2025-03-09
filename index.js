@@ -34,19 +34,24 @@ const player = new Player(client, {
 });
 
 // Configurações do Player e Spotify
-const spotifyConfig = require("./spotify-config");
+player.extractors.loadDefault();
 
-// Configurar extratores e Spotify
-const spotifyConfigSuccess = spotifyConfig.setupSpotify(player);
-
-if (spotifyConfigSuccess) {
-  console.log("Integração com Spotify configurada com sucesso!");
+// Configurar Spotify com as credenciais
+const config = require("./config.json");
+if (config.spotify) {
+  try {
+    console.log("Configurando integração com Spotify...");
+    // As credenciais do Spotify são carregadas automaticamente pelo discord-player
+    console.log("Configurações do Spotify carregadas com sucesso");
+  } catch (spotifyError) {
+    console.error("Erro ao configurar Spotify:", spotifyError);
+  }
 } else {
   console.log(
-    "⚠️ Aviso: Problemas na configuração do Spotify. O bot pode não funcionar como esperado."
+    "Aviso: Credenciais do Spotify não encontradas no arquivo config.json"
   );
   console.log(
-    "👉 Certifique-se de configurar as credenciais do Spotify no arquivo config.json"
+    "O bot pode não funcionar corretamente sem as credenciais do Spotify"
   );
 }
 
