@@ -43,8 +43,35 @@ const player = new Player(client, {
 player.extractors.loadDefault();
 
 // Configurar Spotify com as credenciais
-const config = require("./config.json");
-if (config.spotify) {
+let spotifyConfig = {
+  clientId: process.env.SPOTIFY_CLIENT_ID,
+  clientSecret: process.env.SPOTIFY_CLIENT_SECRET,
+};
+
+// Tenta carregar config.json como fallback para desenvolvimento local
+try {
+  const configFile = require("./config.json");
+
+  // Se as variáveis de ambiente não estiverem definidas, usa as do config.json
+  if (!spotifyConfig.clientId && configFile.spotify) {
+    spotifyConfig.clientId = configFile.spotify.clientId;
+  }
+
+  if (!spotifyConfig.clientSecret && configFile.spotify) {
+    spotifyConfig.clientSecret = configFile.spotify.clientSecret;
+  }
+
+  console.log(
+    "Configurações híbridas: variáveis de ambiente + config.json (fallback)"
+  );
+} catch (configError) {
+  console.log(
+    "Aviso: config.json não encontrado, usando apenas variáveis de ambiente"
+  );
+}
+
+// Verifica se as credenciais foram encontradas por qualquer método
+if (spotifyConfig.clientId && spotifyConfig.clientSecret) {
   try {
     console.log("Configurando integração com Spotify...");
     // As credenciais do Spotify são carregadas automaticamente pelo discord-player
@@ -54,7 +81,7 @@ if (config.spotify) {
   }
 } else {
   console.log(
-    "Aviso: Credenciais do Spotify não encontradas no arquivo config.json"
+    "Aviso: Credenciais do Spotify não encontradas nas variáveis de ambiente ou config.json"
   );
   console.log(
     "O bot pode não funcionar corretamente sem as credenciais do Spotify"
