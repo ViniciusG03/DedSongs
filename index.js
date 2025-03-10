@@ -1,5 +1,5 @@
 // Arquivo: index.js
-
+require("dotenv").config();
 process.env.YOUTUBE_EXTRACTOR_LIBRARY = "@distube/ytdl-core";
 
 const {
@@ -12,8 +12,6 @@ const {
 const { Player } = require("discord-player");
 const fs = require("fs");
 const path = require("path");
-
-require("dotenv").config();
 
 const token = process.env.DISCORD_TOKEN;
 
