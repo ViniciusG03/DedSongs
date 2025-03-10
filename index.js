@@ -10,9 +10,12 @@ const {
   EmbedBuilder,
 } = require("discord.js");
 const { Player } = require("discord-player");
-const { token } = require("./config.json");
 const fs = require("fs");
 const path = require("path");
+
+require("dotenv").config();
+
+const token = process.env.DISCORD_TOKEN;
 
 // Criando o cliente Discord com as permissões necessárias
 const client = new Client({
@@ -114,6 +117,7 @@ player.events.on("playerStart", (queue, track) => {
     console.log("----- DEPURAÇÃO DE ÁUDIO -----");
     console.log("Faixa iniciada:", track.title);
     console.log("URL da faixa:", track.url);
+    console.log("Thumbnail:", track.thumbnail);
     console.log("ID do canal de voz:", queue.channel?.id);
     console.log("Método de extração:", track.extractor || "desconhecido");
     console.log(
@@ -121,10 +125,30 @@ player.events.on("playerStart", (queue, track) => {
       queue.node.isPlaying() ? "tocando" : "parado"
     );
     console.log("-----------------------------");
+
+    // Verificação e normalização do thumbnail
+    let thumbnailUrl = track.thumbnail;
+    if (
+      !thumbnailUrl ||
+      thumbnailUrl === "null" ||
+      thumbnailUrl === "undefined"
+    ) {
+      // Se o Spotify não retornar thumbnail, tenta extrair do YouTube
+      if (track.raw && track.raw.thumbnail) {
+        thumbnailUrl = track.raw.thumbnail;
+      } else {
+        // Backup: usa um placeholder ou tenta obter da propriedade artworkURL
+        thumbnailUrl =
+          track.artworkURL ||
+          track.raw?.artworkURL ||
+          "https://i.imgur.com/nkKVlHV.png";
+      }
+    }
+
     const embed = new EmbedBuilder()
       .setTitle("🎵 Tocando agora")
       .setDescription(`**${track.title}**`)
-      .setThumbnail(track.thumbnail || "https://i.imgur.com/nkKVlHV.png")
+      .setThumbnail(thumbnailUrl)
       .setColor("#1DB954") // Cor verde do Spotify
       .addFields(
         { name: "Artista", value: track.author || "Desconhecido" },

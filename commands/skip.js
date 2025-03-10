@@ -1,6 +1,4 @@
 // Arquivo: commands/skip.js
-// Este comando pula para a próxima música na fila
-
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 
 module.exports = {
@@ -29,30 +27,48 @@ module.exports = {
       });
     }
 
-    // Armazena o título da música que será pulada
+    // Armazena a música atual
     const currentSong = queue.currentTrack;
 
-    // Verifica se tem próxima música
-    if (queue.tracks.size === 0) {
-      return interaction.reply({
-        content: "⚠️ Não há próxima música na fila para pular!",
-        ephemeral: true,
-      });
+    // Tratamento para caso seja a última música
+    const hasNextTrack = queue.tracks.size > 0;
+    const nextTrackTitle = hasNextTrack ? queue.tracks.at(0).title : "Nenhuma";
+
+    try {
+      // Tenta pular para a próxima música
+      await queue.node.skip();
+
+      const embed = new EmbedBuilder()
+        .setColor("#FF0000")
+        .setTitle("⏭️ Música pulada")
+        .setDescription(`Pulou: **${currentSong.title}**`)
+        .setThumbnail(
+          currentSong.thumbnail || "https://i.imgur.com/nkKVlHV.png"
+        )
+        .addFields(
+          { name: "Próxima música", value: nextTrackTitle },
+          { name: "Pulado por", value: interaction.user.username }
+        );
+
+      return interaction.reply({ embeds: [embed] });
+    } catch (error) {
+      console.error("Erro ao pular música:", error);
+
+      // Tenta um método alternativo se o primeiro falhar
+      try {
+        if (queue.node.skip) {
+          queue.node.skip();
+        } else if (queue.skip) {
+          queue.skip();
+        }
+        return interaction.reply(`⏭️ Música **${currentSong.title}** pulada!`);
+      } catch (altError) {
+        console.error("Erro no método alternativo:", altError);
+        return interaction.reply({
+          content: `❌ Não foi possível pular a música: ${error.message}`,
+          ephemeral: true,
+        });
+      }
     }
-
-    // Pula para a próxima música
-    await queue.node.skip();
-
-    const embed = new EmbedBuilder()
-      .setColor("#FF0000")
-      .setTitle("⏭️ Música pulada")
-      .setDescription(`Pulou: **${currentSong.title}**`)
-      .setThumbnail(currentSong.thumbnail)
-      .addFields(
-        { name: "Próxima música", value: queue.currentTrack.title },
-        { name: "Pulado por", value: interaction.user.username }
-      );
-
-    return interaction.reply({ embeds: [embed] });
   },
 };

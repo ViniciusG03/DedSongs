@@ -1,5 +1,5 @@
 // Arquivo: commands/play.js
-// Comando de reprodução modificado para usar apenas Spotify
+// Comando de reprodução universal que suporta Spotify e YouTube
 
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js");
 const { QueryType } = require("discord-player");
@@ -7,12 +7,18 @@ const { QueryType } = require("discord-player");
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("play")
-    .setDescription("Reproduz música do Spotify")
+    .setDescription("Reproduz música do Spotify ou YouTube")
     .addStringOption((option) =>
       option
         .setName("consulta")
-        .setDescription("Link do Spotify ou nome da música")
+        .setDescription("Link do Spotify/YouTube ou nome da música")
         .setRequired(true)
+    )
+    .addBooleanOption((option) =>
+      option
+        .setName("youtube")
+        .setDescription("Forçar busca no YouTube (opcional)")
+        .setRequired(false)
     ),
 
   async execute(interaction) {
@@ -26,62 +32,166 @@ module.exports = {
     }
 
     await interaction.deferReply();
-    console.log("Executando comando play (Spotify)");
+    console.log("Executando comando play universal (Spotify/YouTube)");
 
     try {
       const { player } = interaction.client;
       const consulta = interaction.options.getString("consulta");
+      const forceYoutube = interaction.options.getBoolean("youtube") || false;
 
       // Determina o tipo de busca a ser usado
       let searchEngine;
+      let sourceName = ""; // Para uso no log e embed
 
+      // Verifica se o usuário quer forçar busca no YouTube
+      if (forceYoutube) {
+        searchEngine = QueryType.YOUTUBE_SEARCH;
+        sourceName = "YouTube (forçado)";
+        console.log(`Forçando busca no YouTube para: ${consulta}`);
+      }
+      // Verifica se é um link do YouTube
+      else if (
+        consulta.includes("youtube.com") ||
+        consulta.includes("youtu.be")
+      ) {
+        if (consulta.includes("list=")) {
+          searchEngine = QueryType.YOUTUBE_PLAYLIST;
+          sourceName = "Playlist do YouTube";
+          console.log("Detectado: Link para playlist do YouTube");
+        } else {
+          searchEngine = QueryType.YOUTUBE_VIDEO;
+          sourceName = "Vídeo do YouTube";
+          console.log("Detectado: Link para vídeo do YouTube");
+        }
+      }
       // Verifica se é um link do Spotify
-      if (consulta.includes("spotify.com") || consulta.startsWith("spotify:")) {
+      else if (
+        consulta.includes("spotify.com") ||
+        consulta.startsWith("spotify:")
+      ) {
         if (
           consulta.includes("/track/") ||
           consulta.includes("spotify:track:")
         ) {
           searchEngine = QueryType.SPOTIFY_SONG;
+          sourceName = "Música do Spotify";
           console.log("Detectado: Link para música do Spotify");
         } else if (
           consulta.includes("/playlist/") ||
           consulta.includes("spotify:playlist:")
         ) {
           searchEngine = QueryType.SPOTIFY_PLAYLIST;
+          sourceName = "Playlist do Spotify";
           console.log("Detectado: Link para playlist do Spotify");
         } else if (
           consulta.includes("/album/") ||
           consulta.includes("spotify:album:")
         ) {
           searchEngine = QueryType.SPOTIFY_ALBUM;
+          sourceName = "Álbum do Spotify";
           console.log("Detectado: Link para álbum do Spotify");
         } else {
           searchEngine = QueryType.SPOTIFY_SEARCH;
+          sourceName = "Busca no Spotify";
           console.log(
             "Detectado: Outro tipo de link Spotify, usando busca padrão"
           );
         }
       } else {
-        // Se não for um link, faz busca no Spotify
-        searchEngine = QueryType.SPOTIFY_SEARCH;
-        console.log(`Realizando busca no Spotify para: ${consulta}`);
+        // Se não for um link, decide onde buscar com base na opção
+        if (forceYoutube) {
+          searchEngine = QueryType.YOUTUBE_SEARCH;
+          sourceName = "Busca no YouTube";
+          console.log(`Realizando busca no YouTube para: ${consulta}`);
+        } else {
+          // Por padrão, mantemos a busca no Spotify
+          searchEngine = QueryType.SPOTIFY_SEARCH;
+          sourceName = "Busca no Spotify";
+          console.log(`Realizando busca no Spotify para: ${consulta}`);
+        }
+      }
+
+      // Configuração para melhorar resultados de busca
+      const searchOptions = {
+        requestedBy: interaction.user,
+        searchEngine: searchEngine,
+        // Use YouTube como fallback para Spotify
+        fallbackSearchEngine: searchEngine.includes("SPOTIFY")
+          ? QueryType.YOUTUBE_SEARCH
+          : undefined,
+      };
+
+      // Adicionar configurações para melhorar a precisão das buscas
+      if (searchEngine === QueryType.YOUTUBE_SEARCH) {
+        // Para buscas diretas no YouTube, adicionar parâmetros para encontrar conteúdo oficial
+        searchOptions.searchOptions = {
+          maxResults: 5,
+          sortBy: "relevance",
+          overrideQuery: (query) =>
+            `${query} ${query.includes("cover") ? "" : "official audio"}`,
+        };
+      } else if (searchEngine === QueryType.SPOTIFY_SEARCH) {
+        // Para buscas no Spotify + reprodução no YouTube
+        searchOptions.searchOptions = {
+          // Não modifica a consulta do Spotify
+        };
       }
 
       // Busca usando o mecanismo apropriado
-      const searchResult = await player.search(consulta, {
-        requestedBy: interaction.user,
-        searchEngine: searchEngine,
-        // Adicione estas opções:
-        fallbackSearchEngine: QueryType.YOUTUBE_SEARCH, // Força pesquisa de fallback no YouTube
-      });
+      console.log(`Iniciando busca com ${sourceName} para: "${consulta}"`);
+      const searchResult = await player.search(consulta, searchOptions);
 
       if (!searchResult || searchResult.tracks.length === 0) {
         return interaction.followUp(
-          "❌ Não foi possível encontrar resultados para esta consulta no Spotify!"
+          `❌ Não foi possível encontrar resultados para esta consulta no ${sourceName}!`
         );
       }
 
       console.log(`Encontrados ${searchResult.tracks.length} resultados`);
+
+      // Realizar filtragem adicional para encontrar versões oficiais (para buscas não diretas)
+      if (
+        searchEngine === QueryType.SPOTIFY_SEARCH ||
+        searchEngine === QueryType.YOUTUBE_SEARCH
+      ) {
+        if (searchResult.tracks.length > 1) {
+          // Tenta filtrar para encontrar versões oficiais
+          // Cria uma pontuação para cada faixa baseada em quão "oficial" ela parece ser
+          const scoredTracks = searchResult.tracks.map((track) => {
+            let score = 0;
+            const title = track.title.toLowerCase();
+            const author = track.author.toLowerCase();
+
+            // Verificar por sinais de oficialidade
+            if (title.includes("official") || title.includes("original"))
+              score += 3;
+            if (title.includes("audio") || title.includes("music video"))
+              score += 2;
+            if (author.includes("vevo") || author.includes("official"))
+              score += 4;
+            if (author.includes("topic")) score += 3; // "Topic" geralmente indica canal oficial do artista
+
+            // Penalizar sinais de cover
+            if (title.includes("cover") || title.includes("remix")) score -= 5;
+            if (title.includes("karaoke") || title.includes("instrumental"))
+              score -= 5;
+            if (author.includes("cover") || author.includes("karaoke"))
+              score -= 5;
+
+            return { track, score };
+          });
+
+          // Ordena por pontuação, com os mais "oficiais" primeiro
+          scoredTracks.sort((a, b) => b.score - a.score);
+
+          // Substitui a lista de faixas pela lista ordenada
+          searchResult.tracks = scoredTracks.map((item) => item.track);
+
+          console.log(
+            `Reordenação aplicada. Track com maior pontuação: "${searchResult.tracks[0].title}" por "${searchResult.tracks[0].author}"`
+          );
+        }
+      }
 
       // Criar ou obter a fila para o servidor
       const queue = await player.nodes.create(interaction.guild, {
@@ -111,6 +221,7 @@ module.exports = {
           console.error(
             `Erro ao conectar ao canal de voz: ${connectError.message}`
           );
+          player.nodes.delete(interaction.guildId);
           return interaction.followUp(
             "❌ Não foi possível conectar ao canal de voz. Verifique as permissões do bot."
           );
@@ -137,20 +248,24 @@ module.exports = {
         }
       }
 
+      // Define a cor do embed com base na origem
+      let embedColor = "#1DB954"; // Cor verde do Spotify por padrão
+      if (sourceName.includes("YouTube")) {
+        embedColor = "#FF0000"; // Cor vermelha do YouTube
+      }
+
       // Cria um embed para mostrar o que foi adicionado à fila
       const isPlaylist = searchResult.playlist ? true : false;
 
       const embed = new EmbedBuilder()
-        .setColor("#1DB954") // Cor verde do Spotify
+        .setColor(embedColor)
         .setTitle(
           isPlaylist
-            ? "🎵 Playlist adicionada à fila"
-            : "🎵 Música adicionada à fila"
+            ? `🎵 Playlist adicionada à fila (${sourceName})`
+            : `🎵 Música adicionada à fila (${sourceName})`
         )
         .setThumbnail(
-          isPlaylist
-            ? searchResult.tracks[0].thumbnail
-            : searchResult.tracks[0].thumbnail
+          searchResult.tracks[0].thumbnail || "https://i.imgur.com/nkKVlHV.png"
         );
 
       if (isPlaylist) {
@@ -161,14 +276,25 @@ module.exports = {
             { name: "Solicitado por", value: interaction.user.username }
           );
       } else {
-        embed.setDescription(`**${searchResult.tracks[0].title}**`).addFields(
-          {
-            name: "Artista",
-            value: searchResult.tracks[0].author || "Desconhecido",
-          },
-          { name: "Duração", value: searchResult.tracks[0].duration },
-          { name: "Solicitado por", value: interaction.user.username }
-        );
+        // Adicionar informações sobre uso do YouTube
+        let sourceInfo = "";
+        if (
+          searchEngine.includes("SPOTIFY") &&
+          !sourceName.includes("YouTube")
+        ) {
+          sourceInfo = "\n\n*Buscado no Spotify, reproduzido via YouTube*";
+        }
+
+        embed
+          .setDescription(`**${searchResult.tracks[0].title}**${sourceInfo}`)
+          .addFields(
+            {
+              name: "Artista",
+              value: searchResult.tracks[0].author || "Desconhecido",
+            },
+            { name: "Duração", value: searchResult.tracks[0].duration },
+            { name: "Solicitado por", value: interaction.user.username }
+          );
       }
 
       await interaction.followUp({ embeds: [embed] });
