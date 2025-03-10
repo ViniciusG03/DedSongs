@@ -29,14 +29,20 @@ const client = new Client({
 const player = new Player(client, {
   ytdlOptions: {
     quality: "highestaudio",
-    highWaterMark: 1 << 25,
+    highWaterMark: 1 << 24, // Aumentado para melhor buffer
+    dlChunkSize: 0, // Importante para Heroku
   },
   skipFFmpeg: false,
   useLegacyFFmpeg: false,
-  connectionTimeout: 60000,
-  // Adicione estas opções:
-  spotifyBridge: true, // Forçar o uso da bridge
-  // Importante: NÃO bloqueie o YouTube
+  connectionTimeout: 120000, // Aumentar timeout de conexão
+  spotifyBridge: true,
+  disableVolume: false, // Mantenha false mesmo em Heroku
+  leaveOnEmpty: true,
+  leaveOnEnd: true,
+  leaveOnEmptyCooldown: 300000,
+  // Reduzir uso de memória
+  bufferingTimeout: 30000, // Reduzir para 30 segundos
+  smoothVolume: false, // Desativar para economizar CPU
 });
 
 // Configurações do Player e Spotify
